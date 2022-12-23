@@ -9,7 +9,6 @@ import cookieParser from 'cookie-parser';
 import debug from 'debug';
 import * as express from 'express';
 import { Router } from 'express';
-import importFresh from 'import-fresh';
 import morgan from 'morgan';
 import NcToolGui from 'nc-lib-gui';
 import requestIp from 'request-ip';
@@ -17,6 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { NcConfig } from '../interface/config';
 import Migrator from './db/sql-migrator/lib/KnexMigrator';
+import { MetaTable } from './utils/globals';
 import NcConfigFactory from './utils/NcConfigFactory';
 import { Tele } from 'nc-help';
 
@@ -29,8 +29,6 @@ import NcMetaImplEE from './meta/NcMetaIOImplEE';
 import NcMetaMgrCE from './meta/NcMetaMgr';
 import NcMetaMgrEE from './meta/NcMetaMgrEE';
 import { RestApiBuilder } from './v1-legacy/rest/RestApiBuilder';
-import RestAuthCtrlCE from './v1-legacy/rest/RestAuthCtrl';
-import RestAuthCtrlEE from './v1-legacy/rest/RestAuthCtrlEE';
 import mkdirp from 'mkdirp';
 import MetaAPILogger from './meta/MetaAPILogger';
 import NcUpgrader from './version-upgrader/NcUpgrader';
@@ -46,10 +44,6 @@ import initAdminFromEnv from './meta/api/userApi/initAdminFromEnv';
 
 const log = debug('nc:app');
 require('dotenv').config();
-
-const NcProjectBuilder = process.env.EE
-  ? NcProjectBuilderEE
-  : NcProjectBuilderCE;
 
 export default class Noco {
   private static _this: Noco;
@@ -94,7 +88,6 @@ export default class Noco {
 
   public projectBuilders: Array<NcProjectBuilderCE | NcProjectBuilderEE> = [];
   private apiBuilders: Array<RestApiBuilder | GqlApiBuilder> = [];
-  private ncToolApi;
   private config: NcConfig;
   private requestContext: any;
 
@@ -227,10 +220,7 @@ export default class Noco {
       req.ncProjectId = req?.query?.project_id || req?.body?.project_id;
       next();
     });
-    /*    this.router.use(this.config.dashboardPath, (req: any, _res, next) => {
-          req.ncProjectId = req?.body?.project_id;
-          next();
-        })*/
+
     this.router.use(`/nc/:project_id/*`, (req: any, _res, next) => {
       req.ncProjectId = req.ncProjectId || req.params.project_id;
       next();
@@ -239,23 +229,9 @@ export default class Noco {
 
     /******************* Middlewares : end *******************/
 
-    // await this.initProjectBuilders();
-
-    // const runTimeHandler = this.handleRuntimeChanges(progressCallback);
-
-    // this.ncToolApi.addListener(runTimeHandler);
-    // this.metaMgr.setListener(runTimeHandler);
-    // this.metaMgrv2.setListener(runTimeHandler);
-    // await this.metaMgr.initHandler(this.router);
-    // await this.metaMgrv2.initHandler(this.router);
-
     await NcPluginMgrv2.init(Noco.ncMeta);
     registerMetaApis(this.router, server);
 
-    // this.router.use(
-    //   this.config.dashboardPath,
-    //   await this.ncToolApi.expressMiddleware()
-    // );
     this.router.use(NcToolGui.expressMiddleware(this.config.dashboardPath));
     this.router.get('/', (_req, res) =>
       res.redirect(this.config.dashboardPath)
@@ -309,118 +285,6 @@ export default class Noco {
 
   public addToContext(context: any) {
     this.requestContext = context;
-  }
-
-  protected handleRuntimeChanges(_progressCallback: Function) {
-    return async (data): Promise<any> => {
-      switch (data?.req?.api) {
-        case 'projectCreateByWeb':
-        case 'projectCreateByOneClick':
-        case 'projectCreateByWebWithXCDB':
-          {
-            //  || data?.req?.args?.project?.title || data?.req?.args?.title
-            const project = await Noco.ncMeta.projectGetById(data?.res?.id);
-            const builder = new NcProjectBuilder(this, this.config, project);
-            this.projectBuilders.push(builder);
-            await builder.init(true);
-          }
-          break;
-        // create project builder for newly imported project
-        // duplicated code - projectCreateByWeb
-        case 'xcMetaTablesImportZipToLocalFsAndDb':
-          {
-            if (data.req?.freshImport) {
-              const project = await Noco.ncMeta.projectGetById(
-                data?.req?.project_id
-              );
-              const builder = new NcProjectBuilder(this, this.config, project);
-              this.projectBuilders.push(builder);
-              await builder.init(true);
-            } else {
-              const projectBuilder = this.projectBuilders.find(
-                (pb) => pb.id == data.req?.project_id
-              );
-              return projectBuilder?.handleRunTimeChanges(data);
-            }
-          }
-          break;
-
-        case 'projectUpdateByWeb':
-          {
-            const projectId = data.req?.project_id;
-            const project = await Noco._ncMeta.projectGetById(
-              data?.req?.project_id
-            );
-            const projectBuilder = this.projectBuilders.find(
-              (pb) => pb.id === projectId
-            );
-
-            projectBuilder.updateConfig(project.config);
-            await projectBuilder.reInit();
-          }
-          break;
-
-        case 'projectChangeEnv':
-          try {
-            this.config = importFresh(
-              path.join(process.cwd(), 'config.xc.json')
-            ) as NcConfig;
-            this.config.toolDir = this.config.toolDir || process.cwd();
-            Noco._ncMeta.setConfig(this.config);
-            this.metaMgr.setConfig(this.config);
-            Object.assign(process.env, {
-              NODE_ENV: (this.env = this.config.workingEnv),
-            });
-            this.router.stack.splice(0, this.router.stack.length);
-            this.ncToolApi.destroy();
-            this.ncToolApi.reInitialize(this.config);
-            // await this.init({progressCallback});
-          } catch (e) {
-            console.log(e);
-          }
-          break;
-
-        default: {
-          const projectBuilder = this.projectBuilders.find(
-            (pb) => pb.id == data.req?.project_id
-          );
-          return projectBuilder?.handleRunTimeChanges(data);
-        }
-      }
-    };
-  }
-
-  protected async initProjectBuilders() {
-    // @ts-ignore
-    const RestAuthCtrl = process.env.EE ? RestAuthCtrlEE : RestAuthCtrlCE;
-
-    this.projectBuilders.splice(0, this.projectBuilders.length);
-
-    // await new RestAuthCtrl(
-    //   this as any,
-    //   Noco._ncMeta?.knex,
-    //   this.config?.meta?.db,
-    //   this.config,
-    //   Noco._ncMeta
-    // ).init();
-
-    this.router.use(this.projectRouter);
-    const projects = await Noco._ncMeta.projectList();
-
-    for (const project of projects) {
-      const projectBuilder = new NcProjectBuilder(this, this.config, project);
-      this.projectBuilders.push(projectBuilder);
-    }
-    let i = 0;
-    for (const builder of this.projectBuilders) {
-      if (
-        projects[i].status === 'started' ||
-        projects[i].status === 'starting'
-      ) {
-        await builder.init();
-      }
-      i++;
-    }
   }
 
   private async syncMigration(): Promise<void> {
@@ -498,12 +362,12 @@ export default class Noco {
     if (this.config?.auth?.jwt) {
       if (!this.config.auth.jwt.secret) {
         let secret = (
-          await Noco._ncMeta.metaGet('', '', 'nc_store', {
+          await Noco._ncMeta.metaGet('', '', MetaTable.STORE, {
             key: 'nc_auth_jwt_secret',
           })
         )?.value;
         if (!secret) {
-          await Noco._ncMeta.metaInsert('', '', 'nc_store', {
+          await Noco._ncMeta.metaInsert('', '', MetaTable.STORE, {
             key: 'nc_auth_jwt_secret',
             value: (secret = uuidv4()),
           });
@@ -518,12 +382,12 @@ export default class Noco {
       }
     }
     let serverId = (
-      await Noco._ncMeta.metaGet('', '', 'nc_store', {
+      await Noco._ncMeta.metaGet('', '', MetaTable.STORE, {
         key: 'nc_server_id',
       })
     )?.value;
     if (!serverId) {
-      await Noco._ncMeta.metaInsert('', '', 'nc_store', {
+      await Noco._ncMeta.metaInsert('', '', MetaTable.STORE, {
         key: 'nc_server_id',
         value: (serverId = Tele.id),
       });
