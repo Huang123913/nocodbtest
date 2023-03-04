@@ -1,18 +1,46 @@
 <script setup lang="ts">
 import { ChangePageInj, PaginationDataInj, computed, inject } from '#imports'
 
+const { showSizeChanger } = defineProps<{ showSizeChanger?: boolean }>()
+
 const paginatedData = inject(PaginationDataInj)!
 
 const changePage = inject(ChangePageInj)!
 
-const count = computed(() => paginatedData.value?.totalRows ?? Infinity)
+const { appInfo } = $(useGlobal())
 
-const size = computed(() => paginatedData.value?.pageSize ?? 25)
+const pageSizeOptions = computed(() =>
+  [
+    '5',
+    '10',
+    '25',
+    '50',
+    '100',
+    '200',
+    '500',
+    '1000',
+    '2000',
+    '5000',
+    ...(appInfo.maxLimit > 5000 ? [appInfo.maxLimit] : []),
+  ].filter((v) => +v >= appInfo.minLimit && +v <= appInfo.maxLimit),
+)
+
+const count = computed(() => paginatedData.value?.totalRows ?? Infinity)
 
 const page = computed({
   get: () => paginatedData?.value?.page ?? 1,
   set: (p) => {
     changePage?.(p)
+  },
+})
+
+const size = computed({
+  get: () => paginatedData?.value?.pageSize ?? 25,
+  set: (size: number) => {
+    if (paginatedData.value) {
+      paginatedData.value.pageSize = size
+      changePage?.(page.value)
+    }
   },
 })
 </script>
@@ -24,16 +52,16 @@ const page = computed({
     </span>
 
     <div class="flex-1" />
-
     <a-pagination
       v-if="count !== Infinity"
       v-model:current="page"
+      v-model:page-size="size"
       size="small"
       class="!text-xs !m-1 nc-pagination"
       :total="count"
-      :page-size="size"
       show-less-items
-      :show-size-changer="false"
+      :page-size-options="pageSizeOptions"
+      :show-size-changer="showSizeChanger"
     />
     <div v-else class="mx-auto flex items-center mt-n1" style="max-width: 250px">
       <span class="text-xs" style="white-space: nowrap"> Change page:</span>
