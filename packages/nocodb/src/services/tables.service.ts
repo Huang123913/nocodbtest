@@ -1,22 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import DOMPurify from 'isomorphic-dompurify';
-import {
-  AuditOperationSubTypes,
-  AuditOperationTypes,
-  isVirtualCol,
-  ModelTypes,
-  UITypes,
-} from 'nocodb-sdk';
-import { T } from 'nc-help';
+import { AppEvents, isVirtualCol, ModelTypes, UITypes } from 'nocodb-sdk';
 import ProjectMgrv2 from '../db/sql-mgr/v2/ProjectMgrv2';
 import { NcError } from '../helpers/catchError';
 import getColumnPropsFromUIDT from '../helpers/getColumnPropsFromUIDT';
 import getColumnUiType from '../helpers/getColumnUiType';
 import getTableNameAlias, { getColumnNameAlias } from '../helpers/getTableName';
 import mapDefaultDisplayValue from '../helpers/mapDefaultDisplayValue';
-import { Audit, Column, Model, ModelRoleVisibility, Project } from '../models';
+import { Column, Model, ModelRoleVisibility, Project } from '../models';
 import NcConnectionMgrv2 from '../utils/common/NcConnectionMgrv2';
 import { validatePayload } from '../helpers';
+import { AppHooksService } from './app-hooks/app-hooks.service';
 import type { LinkToAnotherRecordColumn, User, View } from '../models';
 import type {
   ColumnType,
@@ -26,10 +20,13 @@ import type {
 
 @Injectable()
 export class TablesService {
+  constructor(private readonly appHooksService: AppHooksService) {}
+
   async tableUpdate(param: {
     tableId: any;
     table: TableReqType & { project_id?: string };
     projectId?: string;
+    user: User;
   }) {
     const model = await Model.get(param.tableId);
 
@@ -130,7 +127,11 @@ export class TablesService {
       tn_old: model.table_name,
     });
 
-    T.emit('evt', { evt_type: 'table:updated' });
+    this.appHooksService.emit(AppEvents.TABLE_UPDATE, {
+      table: model,
+      user: param.user,
+    });
+
     return true;
   }
 
@@ -180,17 +181,11 @@ export class TablesService {
       });
     }
 
-    await Audit.insert({
-      project_id: project.id,
-      base_id: base.id,
-      op_type: AuditOperationTypes.TABLE,
-      op_sub_type: AuditOperationSubTypes.DELETE,
-      user: param.user?.email,
-      description: `Deleted ${table.type} ${table.table_name} with alias ${table.title}  `,
+    this.appHooksService.emit(AppEvents.TABLE_DELETE, {
+      table,
+      user: param.user,
       ip: param.req?.clientIp,
-    }).then(() => {});
-
-    T.emit('evt', { evt_type: 'table:deleted' });
+    });
 
     return table.delete();
   }
@@ -436,19 +431,7 @@ export class TablesService {
       base_id: base.id,
     });
 
-    await Audit.insert({
-      project_id: project.id,
-      base_id: base.id,
-      op_type: AuditOperationTypes.TABLE,
-      op_sub_type: AuditOperationSubTypes.CREATE,
-      user: param.user?.email,
-      description: `Table ${tableCreatePayLoad.table_name} with alias ${tableCreatePayLoad.title} has been created`,
-      ip: param.req?.clientIp,
-    }).then(() => {});
-
     mapDefaultDisplayValue(param.table.columns);
-
-    T.emit('evt', { evt_type: 'table:created' });
 
     // todo: type correction
     const result = await Model.insert(project.id, base.id, {
@@ -473,6 +456,12 @@ export class TablesService {
       }),
       order: +(tables?.pop()?.order ?? 0) + 1,
     } as any);
+
+    this.appHooksService.emit(AppEvents.TABLE_CREATE, {
+      table: result,
+      user: param.user,
+      ip: param.req?.clientIp,
+    });
 
     return result;
   }

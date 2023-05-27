@@ -17,6 +17,7 @@ import { AuthTokenStrategy } from './strategies/authtoken.strategy/authtoken.str
 import { BaseViewStrategy } from './strategies/base-view.strategy/base-view.strategy';
 import { MetasModule } from './modules/metas/metas.module';
 import { JobsModule } from './modules/jobs/jobs.module';
+import { AppHooksListenerService } from './services/app-hooks-listener.service';
 import { AppInitService } from './services/app-init.service';
 import type { MiddlewareConsumer } from '@nestjs/common';
 
@@ -37,6 +38,7 @@ import type { MiddlewareConsumer } from '@nestjs/common';
           }),
         ]
       : []),
+    TestModule,
   ],
   controllers: [],
   providers: [
@@ -49,6 +51,7 @@ import type { MiddlewareConsumer } from '@nestjs/common';
     AuthTokenStrategy,
     BaseViewStrategy,
     HookHandlerService,
+    AppHooksListenerService,
     AppInitService,
   ],
 })

@@ -8,9 +8,11 @@ import { SocketGateway } from '../../gateways/socket.gateway';
 import { Connection } from '../../connection/connection';
 import { GlobalGuard } from '../../guards/global/global.guard';
 import { MetaService } from '../../meta/meta.service';
+import { AppHooksService } from '../../services/app-hooks/app-hooks.service';
 import Noco from '../../Noco';
 import { JwtStrategy } from '../../strategies/jwt.strategy';
 import { UsersService } from '../../services/users/users.service';
+import { EventEmitterModule } from '../event-emitter/event-emitter.module';
 import type { Provider } from '@nestjs/common';
 
 export const JwtStrategyProvider: Provider = {
@@ -39,8 +41,9 @@ export const JwtStrategyProvider: Provider = {
 
 @Global()
 @Module({
-  imports: [],
+  imports: [EventEmitterModule],
   providers: [
+    AppHooksService,
     appInitServiceProvider,
     Connection,
     MetaService,
@@ -50,6 +53,7 @@ export const JwtStrategyProvider: Provider = {
     SocketGateway,
   ],
   exports: [
+    AppHooksService,
     AppInitService,
     Connection,
     MetaService,
