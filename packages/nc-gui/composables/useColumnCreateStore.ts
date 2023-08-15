@@ -101,6 +101,14 @@ const [useProvideColumnCreateStore, useColumnCreateStore] = createInjectionState
               })
             },
           },
+          {
+            validator: (rule: any, value: any) => {
+              if (/[!@#$%^&*(),.?":{}|<>]/.test(value)) {
+                return Promise.reject(new Error('Special characters are not allowed in the column name.'))
+              }
+              return Promise.resolve()
+            },
+          },
           fieldLengthValidator(project.value?.bases?.[0].type || ClientType.MYSQL),
         ],
         uidt: [
