@@ -81,9 +81,17 @@ export default class CSVTemplateAdapter {
   }
 
   detectInitialUidt(v: string) {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+    const urlRegex = /^(ftp|http|https):\/\/[^ "]+$/
+    const phoneRegex = /^(\+\d{1,3}\s?)?(\(\d{1,}\)|\d{1,})[-.\s]?(\d{1,}[-.\s]?)*\d{1,}$/
+    const cleanedV = v.replace(/^'+/, '')
+    if (phoneRegex.test(cleanedV)) return UITypes.PhoneNumber
+    if (emailRegex.test(v)) return UITypes.Email
+    if (urlRegex.test(v)) return UITypes.URL
     if (!isNaN(Number(v)) && !isNaN(parseFloat(v))) return UITypes.Number
     if (validateDateWithUnknownFormat(v)) return UITypes.DateTime
     if (['true', 'True', 'false', 'False', '1', '0', 'T', 'F', 'Y', 'N'].includes(v)) return UITypes.Checkbox
+    if (v.length > 20) return UITypes.LongText
     return UITypes.SingleLineText
   }
 
