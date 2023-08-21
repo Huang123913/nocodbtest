@@ -36,7 +36,7 @@ const { formState, generateNewColumnMeta, addOrUpdate, onAlter, onUidtOrIdTypeCh
 
 const { getMeta } = useMetas()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const { $e } = useNuxtApp()
 
@@ -78,6 +78,18 @@ const uiTypesOptions = computed<typeof uiTypes>(() => {
       : []),
   ]
 })
+
+const renderColumnType = (columnType: string) => {
+  if (locale.value === 'en') return columnType
+
+  // when no translation is found, the value of t(`key`) would be `key`
+  if (t(`datatype.${columnType}`) !== `datatype.${columnType}`) {
+    // if the target translation is available, then use it
+    return t(`datatype.${columnType}`)
+  }
+  // else we use the default one (i.e. English)
+  return columnType
+}
 
 const reloadMetaAndData = async () => {
   await getMeta(meta.value?.id as string, true)
@@ -191,7 +203,7 @@ useEventListener('keydown', (e: KeyboardEvent) => {
             <a-select-option v-for="opt of uiTypesOptions" :key="opt.name" :value="opt.name" v-bind="validateInfos.uidt">
               <div class="flex gap-1 items-center">
                 <component :is="opt.icon" class="text-grey" />
-                {{ opt.name }}
+                {{ renderColumnType(opt.name) }}
               </div>
             </a-select-option>
           </a-select>
