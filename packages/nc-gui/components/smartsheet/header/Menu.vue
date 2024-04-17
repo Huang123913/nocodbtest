@@ -378,7 +378,7 @@ const isDuplicateAllowed = computed(() => {
             {{ t('general.insertAfter') }}
           </div>
         </NcMenuItem>
-        <NcMenuItem v-if="!column?.pk" @click="onInsertBefore">
+        <NcMenuItem v-if="!column?.pv" @click="onInsertBefore">
           <div v-e="['a:field:insert:before']" class="nc-column-insert-before nc-header-menu-item">
             <component :is="iconMap.colInsertBefore" class="text-gray-600 !w-4.5 !h-4.5" />
             <!-- Insert Before -->
